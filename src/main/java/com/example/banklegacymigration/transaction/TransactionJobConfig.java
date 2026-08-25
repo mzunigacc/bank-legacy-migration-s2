@@ -11,39 +11,55 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.item.file.FlatFileParseException;
+import org.springframework.dao.TransientDataAccessException;
 
 @Configuration
 public class TransactionJobConfig {
 
-    @Bean
-    public Step transactionStep(
-            JobRepository jobRepository,
-            PlatformTransactionManager transactionManager,
-            FlatFileItemReader<Transaction> transactionItemReader,
-            TransactionProcessor transactionProcessor,
-            TransactionWriter transactionWriter) {
+   @Bean
+public Step transactionStep(
+        JobRepository jobRepository,
+        PlatformTransactionManager transactionManager,
+        FlatFileItemReader<Transaction> transactionItemReader,
+        TransactionProcessor transactionProcessor,
+        TransactionWriter transactionWriter,
+        TransactionSkipListener transactionSkipListener,
+        TransactionStepExecutionListener transactionStepExecutionListener) {
 
-        return new StepBuilder("transactionStep", jobRepository)
-                .<Transaction, Transaction>chunk(10, transactionManager)
-                .reader(transactionItemReader)
-                .processor(transactionProcessor)
-                .writer(transactionWriter)
-                .faultTolerant()
-                .skip(Exception.class)
-                .skipLimit(10)
-                .build();
+    return new StepBuilder("transactionStep", jobRepository)
+            .<Transaction, Transaction>chunk(10, transactionManager)
+            .reader(transactionItemReader)
+            .processor(transactionProcessor)
+            .writer(transactionWriter)
+
+            .faultTolerant()
+
+            .skip(InvalidTransactionException.class)
+            .skip(FlatFileParseException.class)
+            .skipLimit(10)
+
+            .retry(TransientDataAccessException.class)
+            .retryLimit(3)
+
+            .listener(transactionSkipListener)
+            .listener(transactionStepExecutionListener)
+
+            .build();
     }
 
     @Bean
     public Job transactionJob(
-            JobRepository jobRepository,
-            Step transactionStep,
-            Step dailySummaryStep) {
-
+        JobRepository jobRepository,
+        Step transactionStep,
+        Step dailySummaryStep,
+        TransactionJobExecutionListener transactionJobExecutionListener) {
+        
         return new JobBuilder("transactionJob", jobRepository)
-                .start(transactionStep)
-                .next(dailySummaryStep)
-                .build();
+            .listener(transactionJobExecutionListener)
+            .start(transactionStep)
+            .next(dailySummaryStep)
+            .build();
     }
 
     @Bean
