@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.batch.repeat.RepeatStatus;
 
 @Configuration
 public class StatementJobConfig {
@@ -100,7 +101,7 @@ public Step annualSummaryStep(
                         """
                 );
 
-                return null;
+                return RepeatStatus.FINISHED;
             }, transactionManager)
             .build();
         }
