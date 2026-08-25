@@ -5,7 +5,6 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -13,6 +12,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.batch.item.file.FlatFileParseException;
 import org.springframework.dao.TransientDataAccessException;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.batch.item.support.SynchronizedItemStreamReader;
 
 @Configuration
 public class TransactionJobConfig {
@@ -21,14 +22,15 @@ public class TransactionJobConfig {
 public Step transactionStep(
         JobRepository jobRepository,
         PlatformTransactionManager transactionManager,
-        FlatFileItemReader<Transaction> transactionItemReader,
+        SynchronizedItemStreamReader<Transaction> transactionItemReader,
         TransactionProcessor transactionProcessor,
         TransactionWriter transactionWriter,
         TransactionSkipListener transactionSkipListener,
-        TransactionStepExecutionListener transactionStepExecutionListener) {
+        TransactionStepExecutionListener transactionStepExecutionListener,
+        TaskExecutor batchTaskExecutor) {
 
     return new StepBuilder("transactionStep", jobRepository)
-            .<Transaction, Transaction>chunk(10, transactionManager)
+            .<Transaction, Transaction>chunk(5, transactionManager)
             .reader(transactionItemReader)
             .processor(transactionProcessor)
             .writer(transactionWriter)
@@ -44,6 +46,8 @@ public Step transactionStep(
 
             .listener(transactionSkipListener)
             .listener(transactionStepExecutionListener)
+
+            .taskExecutor(batchTaskExecutor)
 
             .build();
     }
